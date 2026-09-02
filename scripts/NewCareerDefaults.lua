@@ -14,6 +14,8 @@ local VANILLA_CURRENT_DAY = 6
 
 local MARKER_FILENAME = "newCareerDefaults.xml"
 
+NewCareerDefaults.markerPending = false
+
 local function info(fmt, ...)
     print(string.format("Info: [%s] %s", MOD_NAME, string.format(fmt, ...)))
 end
@@ -70,13 +72,13 @@ local function writeMarker(mission)
 
     if filename == nil then
         warning("Could not determine savegame directory; marker was not written.")
-        return
+        return false
     end
 
     local xmlFile = createXMLFile("newCareerDefaults", filename, "newCareerDefaults")
     if xmlFile == 0 then
         warning("Could not create marker file: %s", filename)
-        return
+        return false
     end
 
     setXMLInt(xmlFile, "newCareerDefaults#version", 1)
@@ -86,7 +88,13 @@ local function writeMarker(mission)
     saveXMLFile(xmlFile)
     delete(xmlFile)
 
-    info("Marker written: %s", filename)
+    if fileExists(filename) then
+        info("Marker saved: %s", filename)
+        return true
+    end
+
+    warning("Marker save was attempted but the file is not visible: %s", filename)
+    return false
 end
 
 local function dumpCalendar(environment)
@@ -112,12 +120,22 @@ local function isStandardNewCareerState(environment)
             or environment.plannedDaysPerPeriod == VANILLA_DAYS_PER_PERIOD)
 end
 
+local function isAlreadyAppliedInitialState(environment)
+    local targetCurrentDay =
+        (START_PERIOD - 1) * DEFAULT_DAYS_PER_PERIOD + START_DAY_IN_PERIOD
+
+    return environment.currentPeriod == START_PERIOD
+        and environment.currentDay == targetCurrentDay
+        and environment.currentDayInPeriod == START_DAY_IN_PERIOD
+        and environment.daysPerPeriod == DEFAULT_DAYS_PER_PERIOD
+        and environment.plannedDaysPerPeriod == DEFAULT_DAYS_PER_PERIOD
+end
+
 local function applyDefaults(mission)
     local environment = mission.environment
     local targetCurrentDay =
         (START_PERIOD - 1) * DEFAULT_DAYS_PER_PERIOD + START_DAY_IN_PERIOD
 
-    -- Let the game update the planned setting through its normal API.
     if mission.setPlannedDaysPerPeriod ~= nil then
         mission:setPlannedDaysPerPeriod(DEFAULT_DAYS_PER_PERIOD)
         info(
@@ -128,24 +146,19 @@ local function applyDefaults(mission)
         warning("FSBaseMission:setPlannedDaysPerPeriod is not available.")
     end
 
-    -- Apply immediately for the initial state of a brand-new career.
     if mission.missionInfo ~= nil then
         mission.missionInfo.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
     end
 
     environment.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
     environment.daysPerPeriod = DEFAULT_DAYS_PER_PERIOD
-
-    -- FS25 uses timeAdjustment as a season-length normalizer.
     environment.timeAdjustment = 1 / DEFAULT_DAYS_PER_PERIOD
 
-    -- Keep the calendar on the first day of August under the new
-    -- three-days-per-period representation.
     environment.currentDay = targetCurrentDay
     environment.currentDayInPeriod = START_DAY_IN_PERIOD
 
     -- Deliberately do not change currentMonotonicDay.
-    writeMarker(mission)
+    NewCareerDefaults.markerPending = true
 
     info(
         "Applied: month=%s, period=%s, currentDay=%s, currentDayInPeriod=%s, daysPerPeriod=%s, plannedDaysPerPeriod=%s, timeAdjustment=%s, currentMonotonicDay=%s.",
@@ -158,6 +171,8 @@ local function applyDefaults(mission)
         tostring(environment.timeAdjustment),
         tostring(environment.currentMonotonicDay)
     )
+
+    info("Marker will be written after the next savegame save.")
 end
 
 local function onMissionLoaded(mission, ...)
@@ -187,12 +202,37 @@ local function onMissionLoaded(mission, ...)
         return
     end
 
-    if not isStandardNewCareerState(mission.environment) then
-        info("Calendar does not match a standard new FS25 career; no changes made.")
+    if isStandardNewCareerState(mission.environment) then
+        applyDefaults(mission)
         return
     end
 
-    applyDefaults(mission)
+    -- This also repairs the test save made with v1.0.0.2: the calendar
+    -- is already initialized, but its marker may have disappeared during save.
+    if isAlreadyAppliedInitialState(mission.environment) then
+        NewCareerDefaults.markerPending = true
+        info("Initialized calendar detected without marker; marker will be written after the next savegame save.")
+        return
+    end
+
+    info("Calendar does not match a standard new FS25 career; no changes made.")
+end
+
+local function onSaveSavegame(mission, ...)
+    mission = mission or g_currentMission
+
+    if not NewCareerDefaults.markerPending then
+        return
+    end
+
+    if mission == nil then
+        warning("Savegame finished but mission is nil; marker remains pending.")
+        return
+    end
+
+    if writeMarker(mission) then
+        NewCareerDefaults.markerPending = false
+    end
 end
 
 if Mission00 ~= nil and Mission00.loadMission00Finished ~= nil then
@@ -202,4 +242,13 @@ if Mission00 ~= nil and Mission00.loadMission00Finished ~= nil then
     info("Hook installed: Mission00.loadMission00Finished.")
 else
     warning("Mission00.loadMission00Finished is unavailable; hook was not installed.")
+end
+
+if FSBaseMission ~= nil and FSBaseMission.saveSavegame ~= nil then
+    FSBaseMission.saveSavegame =
+        Utils.appendedFunction(FSBaseMission.saveSavegame, onSaveSavegame)
+
+    info("Hook installed: FSBaseMission.saveSavegame.")
+else
+    warning("FSBaseMission.saveSavegame is unavailable; save hook was not installed.")
 end

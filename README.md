@@ -1,46 +1,31 @@
 # FS25_NewCareerDefaults
 
-Version 1.0.0.2
+Version 1.0.0.3
 
 Sets a standard brand-new Farming Simulator 25 career to:
 
 - 3 days per month
 - first day of August
 
-## Detection
+## Persistence marker
 
-The mod recognizes the standard FS25 starting state using:
+The marker file is:
 
-- `currentPeriod = 6` (August)
-- `currentDay = 6`
-- `currentDayInPeriod = 1`
-- `daysPerPeriod = 1`
-- `plannedDaysPerPeriod = 1` (or nil)
+`newCareerDefaults.xml`
 
-`environment.currentMonth` is deliberately not used because it can still be `nil`
-when `Mission00.loadMission00Finished` is called.
+It is no longer created during mission loading. Instead, the mod waits until the
+game finishes its normal save operation and then writes the marker to the savegame
+directory.
 
-## Applied state
+This avoids the marker being lost while a new career savegame directory is being
+created/replaced by Farming Simulator.
 
-For 3 days per period, August period 6 starts at:
+The mod also recognizes the initial state already produced by v1.0.0.2
+(3 days/month, August day 1, `currentDay=16`) and will create a missing marker on
+the next save without changing the calendar again.
 
-`currentDay = (6 - 1) * 3 + 1 = 16`
-
-The mod also sets:
-
-- `daysPerPeriod = 3`
-- `plannedDaysPerPeriod = 3`
-- `timeAdjustment = 1 / 3`
-
-`currentMonotonicDay` is deliberately left unchanged.
-
-## Expected log
+## Expected log after a save
 
 ```text
-Info: [FS25_NewCareerDefaults] Script loaded.
-Info: [FS25_NewCareerDefaults] Hook installed: Mission00.loadMission00Finished.
-Info: [FS25_NewCareerDefaults] Mission00.loadMission00Finished called.
-Info: [FS25_NewCareerDefaults] Calendar before check: ...
-Info: [FS25_NewCareerDefaults] Called FSBaseMission:setPlannedDaysPerPeriod(3).
-Info: [FS25_NewCareerDefaults] Applied: ...
+Info: [FS25_NewCareerDefaults] Marker saved: .../savegameX/newCareerDefaults.xml
 ```

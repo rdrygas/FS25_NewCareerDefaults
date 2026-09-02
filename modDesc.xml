@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="109">
     <author>Robert Drygas / ChatGPT</author>
-    <version>1.0.0.2</version>
+    <version>1.0.0.3</version>
 
     <title>
         <en>New Career Defaults</en>
@@ -18,8 +18,6 @@ Rozpoczyna standardową nową karierę z 3 dniami na miesiąc od pierwszego dnia
     </description>
 
     <multiplayer supported="false"/>
-
-    <iconFilename>mod_icon.dds</iconFilename>
 
     <extraSourceFiles>
         <sourceFile filename="scripts/NewCareerDefaults.lua"/>
