@@ -6,7 +6,6 @@ local DEFAULT_DAYS_PER_PERIOD = 3
 -- FS25 seasonal periods start with March:
 -- 1=Mar, 2=Apr, 3=May, 4=Jun, 5=Jul, 6=Aug.
 local START_PERIOD = 6
-local START_MONTH = 8
 local START_DAY_IN_PERIOD = 1
 
 -- Standard new-career state in FS25.
@@ -105,8 +104,7 @@ local function dumpCalendar(environment)
 end
 
 local function isStandardNewCareerState(environment)
-    return environment.currentMonth == START_MONTH
-        and environment.currentPeriod == START_PERIOD
+    return environment.currentPeriod == START_PERIOD
         and environment.currentDay == VANILLA_CURRENT_DAY
         and environment.currentDayInPeriod == START_DAY_IN_PERIOD
         and environment.daysPerPeriod == VANILLA_DAYS_PER_PERIOD
@@ -119,40 +117,46 @@ local function applyDefaults(mission)
     local targetCurrentDay =
         (START_PERIOD - 1) * DEFAULT_DAYS_PER_PERIOD + START_DAY_IN_PERIOD
 
-    -- The game exposes this setter on FSBaseMission. It normally plans
-    -- the new value for the next season.
+    -- Let the game update the planned setting through its normal API.
     if mission.setPlannedDaysPerPeriod ~= nil then
         mission:setPlannedDaysPerPeriod(DEFAULT_DAYS_PER_PERIOD)
-        info("Called FSBaseMission:setPlannedDaysPerPeriod(%d).", DEFAULT_DAYS_PER_PERIOD)
+        info(
+            "Called FSBaseMission:setPlannedDaysPerPeriod(%d).",
+            DEFAULT_DAYS_PER_PERIOD
+        )
     else
         warning("FSBaseMission:setPlannedDaysPerPeriod is not available.")
     end
 
-    -- Apply the setting immediately for a brand-new career.
+    -- Apply immediately for the initial state of a brand-new career.
     if mission.missionInfo ~= nil then
         mission.missionInfo.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
     end
 
     environment.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
     environment.daysPerPeriod = DEFAULT_DAYS_PER_PERIOD
+
+    -- FS25 uses timeAdjustment as a season-length normalizer.
     environment.timeAdjustment = 1 / DEFAULT_DAYS_PER_PERIOD
 
-    -- Preserve "first day of August" after changing the number of days
-    -- represented by each seasonal period.
+    -- Keep the calendar on the first day of August under the new
+    -- three-days-per-period representation.
     environment.currentDay = targetCurrentDay
     environment.currentDayInPeriod = START_DAY_IN_PERIOD
 
-    -- Deliberately leave currentMonotonicDay untouched.
+    -- Deliberately do not change currentMonotonicDay.
     writeMarker(mission)
 
     info(
-        "Applied: daysPerPeriod=%d, plannedDaysPerPeriod=%d, month=%d, period=%d, currentDay=%d, currentDayInPeriod=%d.",
-        environment.daysPerPeriod,
-        environment.plannedDaysPerPeriod,
-        environment.currentMonth,
-        environment.currentPeriod,
-        environment.currentDay,
-        environment.currentDayInPeriod
+        "Applied: month=%s, period=%s, currentDay=%s, currentDayInPeriod=%s, daysPerPeriod=%s, plannedDaysPerPeriod=%s, timeAdjustment=%s, currentMonotonicDay=%s.",
+        tostring(environment.currentMonth),
+        tostring(environment.currentPeriod),
+        tostring(environment.currentDay),
+        tostring(environment.currentDayInPeriod),
+        tostring(environment.daysPerPeriod),
+        tostring(environment.plannedDaysPerPeriod),
+        tostring(environment.timeAdjustment),
+        tostring(environment.currentMonotonicDay)
     )
 end
 
