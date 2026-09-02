@@ -153,8 +153,9 @@ The transient marker flag is also reset at the beginning of every mission load. 
 
 ```text
 FS25_NewCareerDefaults/
+├── scripts/
+|   └── NewCareerDefaults.lua
 ├── modDesc.xml
-├── NewCareerDefaults.lua
 ├── README.md
 └── README.pl.md
 ```

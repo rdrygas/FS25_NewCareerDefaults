@@ -149,8 +149,9 @@ Flaga oczekującego znacznika jest dodatkowo zerowana przy rozpoczęciu ładowan
 
 ```text
 FS25_NewCareerDefaults/
+├── scripts/
+|   └── NewCareerDefaults.lua
 ├── modDesc.xml
-├── NewCareerDefaults.lua
 ├── README.md
 └── README.pl.md
 ```
