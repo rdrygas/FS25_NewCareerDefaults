@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no" ?>
 <modDesc descVersion="109">
     <author>Robert Drygas / ChatGPT</author>
-    <version>1.0.0.0</version>
+    <version>1.0.0.1</version>
 
     <title>
         <en>New Career Defaults</en>
@@ -10,18 +10,14 @@
 
     <description>
         <en><![CDATA[
-Starts a new standard career with 3 days per month from the first day of August.
-The change is applied only to the standard initial FS25 calendar state and is not reapplied to an existing career.
+Starts a standard new career with 3 days per month from the first day of August.
         ]]></en>
         <pl><![CDATA[
-Rozpoczyna nową standardową karierę z 3 dniami na miesiąc od pierwszego dnia sierpnia.
-Zmiana jest stosowana tylko do standardowego początkowego stanu kalendarza FS25 i nie jest ponownie nakładana na istniejącą karierę.
+Rozpoczyna standardową nową karierę z 3 dniami na miesiąc od pierwszego dnia sierpnia.
         ]]></pl>
     </description>
 
     <multiplayer supported="false"/>
-
-    <iconFilename>mod_icon.dds</iconFilename>
 
     <extraSourceFiles>
         <sourceFile filename="scripts/NewCareerDefaults.lua"/>

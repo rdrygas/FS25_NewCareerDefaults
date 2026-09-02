@@ -1,30 +1,29 @@
 NewCareerDefaults = {}
 
 local MOD_NAME = g_currentModName or "FS25_NewCareerDefaults"
-
--- Configuration
 local DEFAULT_DAYS_PER_PERIOD = 3
 
--- FS25 seasonal periods are counted from March:
--- 1=March, 2=April, 3=May, 4=June, 5=July, 6=August.
+-- FS25 seasonal periods start with March:
+-- 1=Mar, 2=Apr, 3=May, 4=Jun, 5=Jul, 6=Aug.
 local START_PERIOD = 6
 local START_MONTH = 8
 local START_DAY_IN_PERIOD = 1
 
--- Standard FS25 new-career calendar state.
+-- Standard new-career state in FS25.
 local VANILLA_DAYS_PER_PERIOD = 1
 local VANILLA_CURRENT_DAY = 6
 
 local MARKER_FILENAME = "newCareerDefaults.xml"
-local MAX_WAIT_TIME_MS = 10000
 
-local function logInfo(message, ...)
-    Logging.info("[%s] " .. message, MOD_NAME, ...)
+local function info(fmt, ...)
+    print(string.format("Info: [%s] %s", MOD_NAME, string.format(fmt, ...)))
 end
 
-local function logWarning(message, ...)
-    Logging.warning("[%s] " .. message, MOD_NAME, ...)
+local function warning(fmt, ...)
+    print(string.format("Warning: [%s] %s", MOD_NAME, string.format(fmt, ...)))
 end
+
+info("Script loaded.")
 
 local function getSavegameDirectory(mission)
     if mission == nil or mission.missionInfo == nil then
@@ -69,43 +68,50 @@ end
 
 local function writeMarker(mission)
     local filename = getMarkerFilename(mission)
+
     if filename == nil then
-        logWarning("Could not determine savegame directory; marker file was not written.")
+        warning("Could not determine savegame directory; marker was not written.")
         return
     end
 
     local xmlFile = createXMLFile("newCareerDefaults", filename, "newCareerDefaults")
     if xmlFile == 0 then
-        logWarning("Could not create marker file '%s'.", filename)
+        warning("Could not create marker file: %s", filename)
         return
     end
 
     setXMLInt(xmlFile, "newCareerDefaults#version", 1)
     setXMLInt(xmlFile, "newCareerDefaults#daysPerPeriod", DEFAULT_DAYS_PER_PERIOD)
     setXMLInt(xmlFile, "newCareerDefaults#startPeriod", START_PERIOD)
+
     saveXMLFile(xmlFile)
     delete(xmlFile)
+
+    info("Marker written: %s", filename)
 end
 
-local function isStandardNewCareerState(mission)
-    local environment = mission.environment
-    local missionInfo = mission.missionInfo
+local function dumpCalendar(environment)
+    info(
+        "Calendar before check: month=%s, period=%s, currentDay=%s, currentDayInPeriod=%s, daysPerPeriod=%s, plannedDaysPerPeriod=%s, timeAdjustment=%s, currentMonotonicDay=%s",
+        tostring(environment.currentMonth),
+        tostring(environment.currentPeriod),
+        tostring(environment.currentDay),
+        tostring(environment.currentDayInPeriod),
+        tostring(environment.daysPerPeriod),
+        tostring(environment.plannedDaysPerPeriod),
+        tostring(environment.timeAdjustment),
+        tostring(environment.currentMonotonicDay)
+    )
+end
 
-    if environment == nil or missionInfo == nil then
-        return false
-    end
-
-    local plannedDaysPerPeriod =
-        missionInfo.plannedDaysPerPeriod
-        or environment.plannedDaysPerPeriod
-        or environment.daysPerPeriod
-
-    return environment.daysPerPeriod == VANILLA_DAYS_PER_PERIOD
-        and plannedDaysPerPeriod == VANILLA_DAYS_PER_PERIOD
+local function isStandardNewCareerState(environment)
+    return environment.currentMonth == START_MONTH
+        and environment.currentPeriod == START_PERIOD
         and environment.currentDay == VANILLA_CURRENT_DAY
         and environment.currentDayInPeriod == START_DAY_IN_PERIOD
-        and environment.currentPeriod == START_PERIOD
-        and environment.currentMonth == START_MONTH
+        and environment.daysPerPeriod == VANILLA_DAYS_PER_PERIOD
+        and (environment.plannedDaysPerPeriod == nil
+            or environment.plannedDaysPerPeriod == VANILLA_DAYS_PER_PERIOD)
 end
 
 local function applyDefaults(mission)
@@ -113,104 +119,83 @@ local function applyDefaults(mission)
     local targetCurrentDay =
         (START_PERIOD - 1) * DEFAULT_DAYS_PER_PERIOD + START_DAY_IN_PERIOD
 
-    -- Use the game's own settings function when available so the setting shown
-    -- in the menu and the savegame setting are updated normally.
+    -- The game exposes this setter on FSBaseMission. It normally plans
+    -- the new value for the next season.
     if mission.setPlannedDaysPerPeriod ~= nil then
         mission:setPlannedDaysPerPeriod(DEFAULT_DAYS_PER_PERIOD)
+        info("Called FSBaseMission:setPlannedDaysPerPeriod(%d).", DEFAULT_DAYS_PER_PERIOD)
+    else
+        warning("FSBaseMission:setPlannedDaysPerPeriod is not available.")
     end
 
-    -- Keep the saved/planned value explicit as well.
-    mission.missionInfo.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
+    -- Apply the setting immediately for a brand-new career.
+    if mission.missionInfo ~= nil then
+        mission.missionInfo.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
+    end
+
     environment.plannedDaysPerPeriod = DEFAULT_DAYS_PER_PERIOD
-
-    -- Apply the new period length immediately instead of waiting for the next
-    -- season boundary.
     environment.daysPerPeriod = DEFAULT_DAYS_PER_PERIOD
-
-    -- FS25 uses this as a season-length normalizer.
     environment.timeAdjustment = 1 / DEFAULT_DAYS_PER_PERIOD
 
-    -- Keep the career on the first day of August under the new period length.
+    -- Preserve "first day of August" after changing the number of days
+    -- represented by each seasonal period.
     environment.currentDay = targetCurrentDay
     environment.currentDayInPeriod = START_DAY_IN_PERIOD
 
-    -- Intentionally do NOT modify currentMonotonicDay. Weather uses the
-    -- monotonic timeline and changing it can make the forecast/time jump.
-
+    -- Deliberately leave currentMonotonicDay untouched.
     writeMarker(mission)
 
-    logInfo(
-        "Applied new career defaults: %d days/month, August day %d (currentDay=%d).",
-        DEFAULT_DAYS_PER_PERIOD,
-        START_DAY_IN_PERIOD,
-        targetCurrentDay
+    info(
+        "Applied: daysPerPeriod=%d, plannedDaysPerPeriod=%d, month=%d, period=%d, currentDay=%d, currentDayInPeriod=%d.",
+        environment.daysPerPeriod,
+        environment.plannedDaysPerPeriod,
+        environment.currentMonth,
+        environment.currentPeriod,
+        environment.currentDay,
+        environment.currentDayInPeriod
     )
 end
 
-function NewCareerDefaults:loadMap()
-    self.checked = false
-    self.waitTime = 0
-end
+local function onMissionLoaded(mission, ...)
+    info("Mission00.loadMission00Finished called.")
 
-function NewCareerDefaults:update(dt)
-    if self.checked then
+    mission = mission or g_currentMission
+
+    if mission == nil then
+        warning("Mission is nil; no changes made.")
         return
     end
 
-    local mission = g_currentMission
-    if mission == nil or mission.environment == nil or mission.missionInfo == nil then
-        self.waitTime = self.waitTime + dt
-
-        if self.waitTime >= MAX_WAIT_TIME_MS then
-            self.checked = true
-            logWarning("Mission environment was not ready; no changes were made.")
-        end
-
+    if mission.environment == nil then
+        warning("Mission environment is nil; no changes made.")
         return
     end
+
+    dumpCalendar(mission.environment)
 
     if mission.getIsServer ~= nil and not mission:getIsServer() then
-        self.checked = true
+        info("Not the server instance; no changes made.")
         return
     end
-
-    local environment = mission.environment
-    if environment.currentDay == nil
-        or environment.currentDayInPeriod == nil
-        or environment.currentPeriod == nil
-        or environment.currentMonth == nil
-        or environment.daysPerPeriod == nil then
-
-        self.waitTime = self.waitTime + dt
-        return
-    end
-
-    self.checked = true
 
     if hasMarker(mission) then
-        logInfo("Defaults were already applied to this savegame; no changes made.")
+        info("Marker already exists; no changes made.")
         return
     end
 
-    if not isStandardNewCareerState(mission) then
-        logInfo(
-            "Existing or non-standard career detected; no changes made. "
-                .. "Calendar: month=%s period=%s day=%s dayInPeriod=%s daysPerPeriod=%s.",
-            tostring(environment.currentMonth),
-            tostring(environment.currentPeriod),
-            tostring(environment.currentDay),
-            tostring(environment.currentDayInPeriod),
-            tostring(environment.daysPerPeriod)
-        )
+    if not isStandardNewCareerState(mission.environment) then
+        info("Calendar does not match a standard new FS25 career; no changes made.")
         return
     end
 
     applyDefaults(mission)
 end
 
-function NewCareerDefaults:deleteMap()
-    self.checked = false
-    self.waitTime = 0
-end
+if Mission00 ~= nil and Mission00.loadMission00Finished ~= nil then
+    Mission00.loadMission00Finished =
+        Utils.appendedFunction(Mission00.loadMission00Finished, onMissionLoaded)
 
-addModEventListener(NewCareerDefaults)
+    info("Hook installed: Mission00.loadMission00Finished.")
+else
+    warning("Mission00.loadMission00Finished is unavailable; hook was not installed.")
+end
